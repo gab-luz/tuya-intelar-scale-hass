@@ -1,0 +1,1 @@
+tuya-intelar-scale-hass
