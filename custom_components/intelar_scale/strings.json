@@ -1,0 +1,36 @@
+{
+  "title": "Intelar Smart Scale",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to the Intelar IR Smart Scale",
+        "description": "Authenticate with your Tuya account (us.platform.tuya.com) and the device identifier for your scale.",
+        "data": {
+          "name": "Name",
+          "endpoint": "Endpoint",
+          "access_id": "Access ID",
+          "access_secret": "Access Secret",
+          "username": "Tuya Username",
+          "password": "Tuya Password",
+          "country_code": "Country Code",
+          "app_schema": "App Schema",
+          "device_id": "Device ID"
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "This scale is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Update Options",
+        "description": "Configure how often the integration polls the Tuya cloud for new scale measurements.",
+        "data": {
+          "scan_interval": "Scan interval (seconds)"
+        }
+      }
+    }
+  }
+}
