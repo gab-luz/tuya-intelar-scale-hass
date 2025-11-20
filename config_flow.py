@@ -49,11 +49,19 @@ class IntelarConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     VERSION = 1
 
+    async def async_set_unique_id(self, unique_id: str | None, raise_on_progress: bool = False) -> None:
+        """Home Assistant <=2023.7 compatibility shim for renamed method."""
+
+        if hasattr(super(), "async_set_unique_id"):
+            return await super().async_set_unique_id(unique_id, raise_on_progress=raise_on_progress)
+        # Fallback for very old HA versions where _async_set_unique_id existed
+        return await self._async_set_unique_id(unique_id)  # type: ignore[attr-defined]
+
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         if user_input is None:
             return self.async_show_form(step_id="user", data_schema=DATA_SCHEMA)
 
-        await self._async_set_unique_id(user_input[CONF_DEVICE_ID])
+        await self.async_set_unique_id(user_input[CONF_DEVICE_ID])
         self._abort_if_unique_id_configured()
 
         data = user_input.copy()
