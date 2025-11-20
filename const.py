@@ -10,6 +10,7 @@ DEFAULT_SCAN_INTERVAL = timedelta(minutes=5)
 CONF_ACCESS_ID = "access_id"
 CONF_ACCESS_SECRET = "access_secret"
 CONF_ENDPOINT = "endpoint"
+CONF_ENDPOINT_FRIENDLY = "endpoint_friendly"
 CONF_DEVICE_ID = "device_id"
 CONF_USERNAME = "username"
 CONF_PASSWORD = "password"
@@ -34,3 +35,14 @@ COUNTRY_CHOICES: tuple[tuple[str, str], ...] = (
     ("Australia (+61)", "61"),
     ("New Zealand (+64)", "64"),
 )
+
+# Common endpoints grouped by region to avoid typos.
+ENDPOINT_CHOICES: tuple[tuple[str, str], ...] = (
+    ("United States (Western DC)", "https://openapi.tuyaus.com"),
+    ("United States (Western DC, AZ)", "https://openapi-weaz.tuyaus.com"),
+    ("Europe", "https://openapi.tuyaeu.com"),
+    ("India", "https://openapi.tuyain.com"),
+    ("China", "https://openapi.tuyacn.com"),
+)
+
+APP_SCHEMAS: tuple[str, ...] = ("tuyaSmart", "smartlife")
