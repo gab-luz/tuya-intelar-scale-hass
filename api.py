@@ -15,6 +15,9 @@ class IntelarScaleApiError(Exception):
 class IntelarScaleApi:
     """Wrapper around TuyaOpenAPI for the Intelar scale."""
 
+    # Error codes that indicate expired/invalid auth and need a re-login
+    _AUTH_ERROR_CODES = {1010, 1100, 1011}
+
     def __init__(
         self,
         endpoint: str,
@@ -53,15 +56,26 @@ class IntelarScaleApi:
     def get_device_status(self, device_id: str) -> dict[str, Any]:
         """Return the latest device status payload."""
 
-        self.connect()
-        try:
-            result = self._api.get(f"/v1.0/devices/{device_id}/status")
-        except Exception as err:  # pylint: disable=broad-except
-            self._connected = False
-            _LOGGER.error("Tuya API error while fetching status: %s", err)
-            raise IntelarScaleApiError(err) from err
+        for attempt in (1, 2):
+            self.connect()
+            try:
+                result = self._api.get(f"/v1.0/devices/{device_id}/status")
+            except Exception as err:  # pylint: disable=broad-except
+                self._connected = False
+                _LOGGER.error("Tuya API error while fetching status: %s", err)
+                if attempt == 1:
+                    continue
+                raise IntelarScaleApiError(err) from err
 
-        if not result.get("success"):
+            if result.get("success"):
+                break
+
+            code = result.get("code")
+            if code in self._AUTH_ERROR_CODES and attempt == 1:
+                _LOGGER.warning("Tuya token invalid/expired (code %s). Re-authenticating.", code)
+                self._connected = False
+                continue
+
             raise IntelarScaleApiError(result)
 
         status_list: list[dict[str, Any]] = result.get("result", [])

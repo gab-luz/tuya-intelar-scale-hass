@@ -11,6 +11,7 @@ from .const import (
     CONF_ACCESS_ID,
     CONF_ACCESS_SECRET,
     CONF_APP_SCHEMA,
+    COUNTRY_CHOICES,
     CONF_COUNTRY_CODE,
     CONF_DEVICE_ID,
     CONF_ENDPOINT,
@@ -21,6 +22,8 @@ from .const import (
     DOMAIN,
 )
 
+COUNTRY_NAMES = [choice[0] for choice in COUNTRY_CHOICES]
+
 DATA_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_NAME, default="Intelar Scale"): str,
@@ -29,7 +32,7 @@ DATA_SCHEMA = vol.Schema(
         vol.Required(CONF_ACCESS_SECRET): str,
         vol.Required(CONF_USERNAME): str,
         vol.Required(CONF_PASSWORD): str,
-        vol.Required(CONF_COUNTRY_CODE, default="1"): str,
+        vol.Required(CONF_COUNTRY_CODE, default=COUNTRY_NAMES[0]): vol.In(COUNTRY_NAMES),
         vol.Required(CONF_APP_SCHEMA, default="tuyaSmart"): str,
         vol.Required(CONF_DEVICE_ID): str,
     }
@@ -61,6 +64,10 @@ class IntelarConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         data = user_input.copy()
         name = data.pop(CONF_NAME)
+        country_name = data.pop(CONF_COUNTRY_CODE)
+        # Convert friendly country selection back to dialing code for Tuya auth
+        country_code_lookup = dict(COUNTRY_CHOICES)
+        data[CONF_COUNTRY_CODE] = country_code_lookup.get(country_name, country_name)
 
         return self.async_create_entry(title=name, data=data)
 
