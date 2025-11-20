@@ -49,6 +49,17 @@ class IntelarConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     VERSION = 1
 
+    async def _async_set_unique_id(self, unique_id: str | None, raise_on_progress: bool = False) -> None:
+        """Compatibility shim for HA versions expecting this private method."""
+
+        self._unique_id = unique_id  # type: ignore[attr-defined]
+        self.context["unique_id"] = unique_id
+
+    async def async_set_unique_id(self, unique_id: str | None, raise_on_progress: bool = False) -> None:
+        """Public unique_id setter added in newer HA versions."""
+
+        await self._async_set_unique_id(unique_id, raise_on_progress=raise_on_progress)
+
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         if user_input is None:
             return self.async_show_form(step_id="user", data_schema=DATA_SCHEMA)
