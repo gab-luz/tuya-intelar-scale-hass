@@ -49,29 +49,15 @@ class IntelarConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     VERSION = 1
 
-    async def _async_set_unique_id(self, unique_id: str | None, raise_on_progress: bool = False) -> None:
-        """Compatibility shim for HA versions expecting this private method."""
-
-        self._unique_id = unique_id  # type: ignore[attr-defined]
-        self.context["unique_id"] = unique_id
-
-    async def async_set_unique_id(self, unique_id: str | None, raise_on_progress: bool = False) -> None:
-        """Public unique_id setter added in newer HA versions."""
-
-        await self._async_set_unique_id(unique_id, raise_on_progress=raise_on_progress)
-
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         if user_input is None:
             return self.async_show_form(step_id="user", data_schema=DATA_SCHEMA)
 
         device_id = user_input[CONF_DEVICE_ID]
-        # Manually enforce unique_id without relying on HA internals that vary by release
+        # Enforce uniqueness by device_id without relying on HA internals that vary by release
         for entry in self._async_current_entries():
-            if entry.unique_id == device_id:
+            if entry.data.get(CONF_DEVICE_ID) == device_id:
                 return self.async_abort(reason="already_configured")
-
-        self._unique_id = device_id  # type: ignore[attr-defined]
-        self.context["unique_id"] = device_id
 
         data = user_input.copy()
         name = data.pop(CONF_NAME)
