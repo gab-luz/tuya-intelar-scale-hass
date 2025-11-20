@@ -1,54 +1,34 @@
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 import voluptuous as vol
 from homeassistant import config_entries
-from homeassistant.const import CONF_NAME
+from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResult
 
+from .api import TuyaSmartScaleAPI
 from .const import (
     CONF_ACCESS_ID,
-    CONF_ACCESS_SECRET,
-    CONF_APP_SCHEMA,
-    CONF_ENDPOINT,
-    CONF_ENDPOINT_FRIENDLY,
-    APP_SCHEMAS,
-    COUNTRY_CHOICES,
-    CONF_COUNTRY_CODE,
+    CONF_ACCESS_KEY,
+    CONF_BIRTHDATE,
     CONF_DEVICE_ID,
-    CONF_PASSWORD,
-    CONF_SCAN_INTERVAL,
-    CONF_USERNAME,
-    ENDPOINT_CHOICES,
-    DEFAULT_ENDPOINT,
+    CONF_REGION,
+    CONF_SEX,
+    DEFAULT_BIRTHDATE,
+    DEFAULT_REGION,
+    DEFAULT_SEX,
     DOMAIN,
+    REGIONS,
+    SEX_OPTIONS,
 )
 
-COUNTRY_NAMES = [choice[0] for choice in COUNTRY_CHOICES]
-ENDPOINT_NAMES = [choice[0] for choice in ENDPOINT_CHOICES]
+_LOGGER = logging.getLogger(__name__)
 
-DATA_SCHEMA = vol.Schema(
-    {
-        vol.Required(CONF_NAME, default="Intelar Scale"): str,
-        vol.Required(CONF_ENDPOINT_FRIENDLY, default=ENDPOINT_NAMES[0]): vol.In(ENDPOINT_NAMES),
-        vol.Required(CONF_ACCESS_ID): str,
-        vol.Required(CONF_ACCESS_SECRET): str,
-        vol.Required(CONF_USERNAME): str,
-        vol.Required(CONF_PASSWORD): str,
-        vol.Required(CONF_COUNTRY_CODE, default=COUNTRY_NAMES[0]): vol.In(COUNTRY_NAMES),
-        vol.Required(CONF_APP_SCHEMA, default="smartlife"): vol.In(APP_SCHEMAS),
-        vol.Required(CONF_DEVICE_ID): str,
-    }
-)
 
-OPTIONS_SCHEMA = vol.Schema(
-    {
-        vol.Optional(CONF_SCAN_INTERVAL, default=300): vol.All(
-            vol.Coerce(int), vol.Range(min=30, max=3600)
-        )
-    }
-)
+def _region_options() -> dict[str, str]:
+    return {code: data["name"] for code, data in REGIONS.items()}
 
 
 class IntelarConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -57,46 +37,52 @@ class IntelarConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     VERSION = 1
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        if user_input is None:
-            return self.async_show_form(step_id="user", data_schema=DATA_SCHEMA)
+        errors: dict[str, str] = {}
 
-        device_id = user_input[CONF_DEVICE_ID]
-        # Enforce uniqueness by device_id without relying on HA internals that vary by release
-        for entry in self._async_current_entries():
-            if entry.data.get(CONF_DEVICE_ID) == device_id:
-                return self.async_abort(reason="already_configured")
+        if user_input is not None:
+            # Basic duplicate check by device_id
+            for entry in self._async_current_entries():
+                if entry.data.get(CONF_DEVICE_ID) == user_input.get(CONF_DEVICE_ID):
+                    return self.async_abort(reason="already_configured")
 
-        data = user_input.copy()
-        name = data.pop(CONF_NAME)
-        country_name = data.pop(CONF_COUNTRY_CODE)
-        endpoint_name = data.pop(CONF_ENDPOINT_FRIENDLY)
-        # Convert friendly country selection back to dialing code for Tuya auth
-        country_code_lookup = dict(COUNTRY_CHOICES)
-        data[CONF_COUNTRY_CODE] = country_code_lookup.get(country_name, country_name)
-        endpoint_lookup = dict(ENDPOINT_CHOICES)
-        data[CONF_ENDPOINT] = endpoint_lookup.get(endpoint_name, DEFAULT_ENDPOINT)
+            # Validate credentials and device access
+            try:
+                api = TuyaSmartScaleAPI(
+                    access_id=user_input[CONF_ACCESS_ID],
+                    access_key=user_input[CONF_ACCESS_KEY],
+                    device_id=user_input[CONF_DEVICE_ID],
+                    region=user_input.get(CONF_REGION, DEFAULT_REGION),
+                    birthdate=user_input.get(CONF_BIRTHDATE, DEFAULT_BIRTHDATE),
+                    sex=user_input.get(CONF_SEX, DEFAULT_SEX),
+                )
+                device_info = await self.hass.async_add_executor_job(api.get_device_info)
+                if not device_info:
+                    errors["base"] = "cannot_connect"
+                else:
+                    title = device_info.get("name") or "Intelar Scale"
+                    return self.async_create_entry(title=title, data=user_input)
+            except ValueError:
+                errors[CONF_BIRTHDATE] = "invalid_date"
+            except Exception as ex:  # pylint: disable=broad-except
+                _LOGGER.error("Failed to connect to Tuya API: %s", ex)
+                errors["base"] = "cannot_connect"
 
-        return self.async_create_entry(title=name, data=data)
+        data_schema = vol.Schema(
+            {
+                vol.Required(CONF_ACCESS_ID): str,
+                vol.Required(CONF_ACCESS_KEY): str,
+                vol.Required(CONF_DEVICE_ID): str,
+                vol.Optional(CONF_REGION, default=DEFAULT_REGION): vol.In(_region_options()),
+                vol.Optional(CONF_BIRTHDATE, default=DEFAULT_BIRTHDATE): str,
+                vol.Optional(CONF_SEX, default=DEFAULT_SEX): vol.In(SEX_OPTIONS),
+            }
+        )
+
+        return self.async_show_form(
+            step_id="user",
+            data_schema=data_schema,
+            errors=errors,
+        )
 
     async def async_step_import(self, user_input: dict[str, Any]) -> FlowResult:
-        """Handle import from YAML (not supported)."""
-
         return await self.async_step_user(user_input)
-
-    async def async_get_options_flow(self, config_entry: config_entries.ConfigEntry) -> config_entries.OptionsFlow:
-        return IntelarOptionsFlow(config_entry)
-
-
-class IntelarOptionsFlow(config_entries.OptionsFlow):
-    """Handle options for Intelar scale."""
-
-    def __init__(self, entry: config_entries.ConfigEntry) -> None:
-        self.config_entry = entry
-
-    async def async_step_init(
-        self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
-        if user_input is None:
-            return self.async_show_form(step_id="init", data_schema=OPTIONS_SCHEMA)
-
-        return self.async_create_entry(title="Options", data=user_input)
